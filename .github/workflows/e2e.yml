@@ -65,6 +65,9 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # github_token を明示的に渡すと Claude GitHub App のインストールが不要になり、
+          # 標準の GITHUB_TOKEN で PR にコミット/push できる
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           # automation モード: prompt を渡すと @claude メンション無しで実行される
           prompt: |
             この PR の Playwright E2E テストが失敗しています。これは Next.js (App Router)
