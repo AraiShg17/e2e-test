@@ -66,14 +66,18 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # automation モード: prompt を渡すと @claude メンション無しで実行される
           prompt: |
-            この PR の Playwright E2E テストが失敗しています。
+            この PR の Playwright E2E テストが失敗しています。これは Next.js (App Router)
+            + TypeScript + CSS Modules のプロジェクトです。
 
             手順:
             1. `npm run test:e2e` を実行して失敗内容を確認する。
             2. 失敗の原因（「ボタンを押してもモーダルが開かない」など）を特定する。
-               原因は基本的にアプリ側のコード `src/main.ts` / `index.html` にあります。
-               テスト `tests/` は正しい仕様なので、テストを甘くして通すのは禁止です。
-            3. アプリのコードを修正し、`npm run test:e2e` が全て緑になるまで繰り返す。
+               原因は基本的にアプリ側のコード `features/modal-demo/ModalDemo.tsx` や
+               `app/` 配下にあります。テスト `tests/` は正しい仕様なので、テストを
+               甘くして通すのは禁止です。
+            3. `.claude/skills/` のフロントエンド規約（frontend-directory /
+               frontend-html-css / frontend-native-ui など）に従ってアプリのコードを
+               修正し、`npm run test:e2e` が全て緑になるまで繰り返す。
             4. 緑になったら、変更を分かりやすいメッセージでコミットし、この PR ブランチに push する。
 
             テストファイルは編集せず、必ずアプリのコードを直して直すこと。

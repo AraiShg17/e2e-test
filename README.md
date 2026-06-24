@@ -1,6 +1,6 @@
 # e2e-test
 
-Playwright による E2E テストと、**テスト失敗時に Claude が自動でアプリを修正して PR を更新する** CI のサンプルです。
+**Next.js (App Router) + Playwright** の E2E テストと、**テスト失敗時に Claude が自動でアプリを修正して PR を更新する** CI のサンプルです。
 
 「ボタンを押すとモーダルが開く」という単純なアプリを題材に、次の一連を実演します：
 
@@ -8,14 +8,26 @@ Playwright による E2E テストと、**テスト失敗時に Claude が自動
 壊れた PR を出す → CI で E2E 失敗 → Claude が自動修正 → PR が緑に戻る
 ```
 
-## 構成
+## 技術スタック
+
+- **Next.js 15 (App Router) + React 19 + TypeScript**
+- **CSS Modules**（Tailwind は使わない / `@layer` + デザイントークン + `light-dark()`）
+- **Playwright**（Chromium）で E2E
+- CI は **GitHub Actions + `anthropics/claude-code-action@v1`**
+
+## ディレクトリ構成
+
+`app/` は URL 境界に徹し、画面実装は `features/` に置く方針（`.claude/skills/frontend-directory` 準拠）。
 
 | パス | 役割 |
 | --- | --- |
-| `index.html` / `src/main.ts` | ボタン → モーダルを開閉する最小アプリ（Vite + Vanilla TS） |
-| `tests/modal.spec.ts` | クリック→モーダル表示を検証する E2E テスト |
-| `playwright.config.ts` | Vite dev サーバーを自動起動して Chromium でテスト |
+| `app/layout.tsx` / `app/page.tsx` | ルート・メタデータ。`page.tsx` は feature を呼ぶだけ（Server Component） |
+| `features/modal-demo/ModalDemo.tsx` | ボタン → `<dialog>` をモーダル表示（`'use client'` は末端のみ） |
+| `features/modal-demo/ModalDemo.module.css` | CSS Modules + BEM のスタイル |
+| `styles/globals.css` | `@layer` とデザイントークン |
+| `tests/modal.spec.ts` | クリック→モーダル表示を検証する E2E |
 | `.github/workflows/e2e.yml` | PR で E2E 実行 → **失敗したら Claude が自動修正** |
+| `.claude/skills/` | フロントエンド実装規約（Claude が参照） |
 
 ## ローカルで動かす
 
@@ -23,14 +35,14 @@ Playwright による E2E テストと、**テスト失敗時に Claude が自動
 npm install
 npx playwright install chromium
 
-# テスト実行
+# テスト実行（Playwright が next dev を自動起動）
 npm run test:e2e
 
-# UI モード（ブラウザで挙動を見ながら）
+# UI モード
 npm run test:e2e:ui
 
 # アプリを目視確認
-npm run dev   # → http://localhost:5173
+npm run dev   # → http://localhost:3000
 ```
 
 ## CI（PR 時に自動実行）
@@ -41,7 +53,7 @@ npm run dev   # → http://localhost:5173
 2. **`auto-fix` ジョブ**: `e2e` が **失敗したときだけ** 起動。
    `anthropics/claude-code-action@v1` が PR の head ブランチ上で
    - `npm run test:e2e` を実行して失敗原因を特定
-   - `src/` のアプリコードを修正（テストは編集しない）
+   - `features/` のアプリコードを修正（テストは編集しない）
    - 全テストが緑になるまで繰り返し、修正コミットを PR に push
 
    Claude はアクション内でテストを実行して**自分で緑を確認してから**コミットします。

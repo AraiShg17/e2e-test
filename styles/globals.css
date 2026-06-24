@@ -1,0 +1,54 @@
+@layer reset, base, theme, components, utilities;
+
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer theme {
+  :root {
+    color-scheme: light dark;
+
+    /* raw palette */
+    --white: #ffffff;
+    --slate-50: #f8fafc;
+    --slate-900: #0f172a;
+    --gray-900: #111827;
+    --indigo-500: #6366f1;
+    --indigo-600: #4f46e5;
+
+    /* semantic tokens */
+    --color-surface: light-dark(var(--slate-50), var(--slate-900));
+    --color-text: light-dark(var(--gray-900), var(--slate-50));
+    --color-action-bg: var(--indigo-500);
+    --color-action-bg-hover: var(--indigo-600);
+    --color-on-action: var(--white);
+
+    /* scale tokens */
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --duration-default: 0.2s;
+  }
+}
+
+@layer base {
+  body {
+    min-block-size: 100dvb;
+    color: var(--color-text);
+    background: var(--color-surface);
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+  }
+}

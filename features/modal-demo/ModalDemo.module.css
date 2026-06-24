@@ -1,0 +1,88 @@
+.demo {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1.5rem;
+  min-block-size: 100dvb;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.demo__title {
+  margin: 0;
+  font-size: clamp(1.25rem, 4cqi, 2rem);
+}
+
+.demo__openButton {
+  padding-block: 0.6rem;
+  padding-inline: 1.2rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-action-bg);
+  color: var(--color-on-action);
+  cursor: pointer;
+  transition: background var(--duration-default);
+}
+
+.demo__openButton:hover {
+  background: var(--color-action-bg-hover);
+}
+
+.demo__openButton:focus-visible {
+  outline: 2px solid var(--color-action-bg-hover);
+  outline-offset: 2px;
+}
+
+.dialog {
+  --_dialog-padding: 2rem;
+
+  margin: auto;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: var(--_dialog-padding);
+  max-inline-size: min(28rem, 100% - 2rem);
+  color: var(--color-text);
+  background: var(--color-surface);
+  isolation: isolate;
+  overscroll-behavior: contain;
+}
+
+.dialog::backdrop {
+  background: color-mix(in oklab, var(--slate-900) 60%, transparent);
+  overscroll-behavior: contain;
+}
+
+.dialog__title {
+  margin-block: 0 0.5rem;
+}
+
+.dialog__body {
+  margin: 0;
+}
+
+.dialog__actions {
+  margin: 0;
+  margin-block-start: 1.5rem;
+  display: flex;
+  justify-content: safe end;
+}
+
+.dialog__closeButton {
+  padding-block: 0.5rem;
+  padding-inline: 1rem;
+  border: 1px solid color-mix(in oklab, var(--color-text) 24%, transparent);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.dialog__closeButton:focus-visible {
+  outline: 2px solid var(--color-action-bg);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo__openButton {
+    transition: none;
+  }
+}
