@@ -38,18 +38,41 @@ npx playwright install chromium
 # テスト実行（Playwright が next dev を自動起動）
 npm run test:e2e
 
-# UI モード
+# UI モード（タイムラインを見ながら）
 npm run test:e2e:ui
+
+# 実際にブラウザを表示して目視
+npm run test:e2e -- --headed
 
 # アプリを目視確認
 npm run dev   # → http://localhost:3000
 ```
 
+### 失敗の「証拠」を見る
+
+Playwright は実際の Chromium を起動して操作・検証しています。失敗時には以下が `test-results/` と HTML レポートに残ります（`playwright.config.ts` で設定）。
+
+| 証拠 | 設定 | 中身 |
+| --- | --- | --- |
+| スクリーンショット | `screenshot: only-on-failure` | 失敗の瞬間の PNG |
+| 録画 | `video: retain-on-failure` | 操作の様子の webm |
+| トレース | `trace: retain-on-failure` | 操作ごとのDOM・スクショ・ネットワーク・コンソールを時系列再生 |
+
+```bash
+# HTML レポート（合否＋各証拠へのリンク）を開く
+npx playwright show-report
+
+# トレースを再生（巻き戻して各操作の見た目を確認できる）
+npx playwright show-trace test-results/**/trace.zip
+```
+
+CI ではこれらを `playwright-report` artifact にまとめて保存し、結果サマリを PR にコメントします。
+
 ## CI（PR 時に自動実行）
 
 `.github/workflows/e2e.yml` は PR の作成・更新時に動きます。
 
-1. **`e2e` ジョブ**: `npm ci` → Playwright で E2E 実行。レポートを artifact 保存。
+1. **`e2e` ジョブ**: `npm ci` → Playwright で E2E 実行。**失敗時はスクリーンショット・録画(webm)・トレースを証拠として保存**し、結果サマリを PR にコメントします。
 2. **`auto-fix` ジョブ**: `e2e` が **失敗したときだけ** 起動。
    `anthropics/claude-code-action@v1` が PR の head ブランチ上で
    - `npm run test:e2e` を実行して失敗原因を特定

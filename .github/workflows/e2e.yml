@@ -30,13 +30,75 @@ jobs:
       - name: Run E2E tests
         run: npm run test:e2e
 
-      - name: Upload Playwright report
+      - name: Upload Playwright report (screenshots / video / trace)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
+
+      # 結果を PR コメント + Actions の Summary に出す（artifact を DL しなくても確認できる）
+      - name: Comment test results on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let passed = 0, failed = 0, flaky = 0, skipped = 0;
+            const failedTests = [];
+            try {
+              const data = JSON.parse(fs.readFileSync('playwright-report/results.json', 'utf8'));
+              const walk = (suites = []) => {
+                for (const suite of suites) {
+                  for (const spec of suite.specs || []) {
+                    for (const t of spec.tests || []) {
+                      if (t.status === 'expected') passed++;
+                      else if (t.status === 'unexpected') { failed++; failedTests.push(spec.title); }
+                      else if (t.status === 'flaky') flaky++;
+                      else if (t.status === 'skipped') skipped++;
+                    }
+                  }
+                  walk(suite.suites);
+                }
+              };
+              walk(data.suites);
+            } catch (e) {
+              core.warning(`results.json の解析に失敗: ${e.message}`);
+            }
+
+            const ok = failed === 0;
+            const header = ok
+              ? '### ✅ E2E パス'
+              : '### ❌ E2E 失敗';
+            const counts = `🟢 ${passed} passed / 🔴 ${failed} failed / 🟡 ${flaky} flaky / ⚪ ${skipped} skipped`;
+            const failList = failedTests.length
+              ? '\n\n**失敗したテスト**\n' + failedTests.map(t => `- ${t}`).join('\n')
+              : '';
+            const evidence = ok
+              ? ''
+              : `\n\n**証拠（スクショ / 録画 / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\` で再生できます。`;
+
+            const marker = '<!-- e2e-report -->';
+            const body = `${marker}\n${header}\n\n${counts}${failList}${evidence}\n\n<sub>[ワークフロー実行ログ](${runUrl})</sub>`;
+
+            core.summary.addRaw(body).write();
+
+            if (context.payload.pull_request) {
+              const { owner, repo } = context.repo;
+              const issue_number = context.payload.pull_request.number;
+              const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+              const existing = comments.find(c => c.body && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              }
+            }
 
   auto-fix:
     name: Claude auto-fix on failure

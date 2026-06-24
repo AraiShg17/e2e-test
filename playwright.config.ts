@@ -10,11 +10,19 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [["github"], ["html", { open: "never" }]]
+    ? [
+        ["github"],
+        ["html", { open: "never" }],
+        ["json", { outputFile: "playwright-report/results.json" }],
+        ["list"],
+      ]
     : [["html", { open: "never" }], ["list"]],
   use: {
     baseURL,
-    trace: "on-first-retry",
+    // 失敗を「証拠」として残す: 失敗時スクショ / 失敗時録画 / 失敗時トレース
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
+    trace: "retain-on-failure",
   },
   projects: [
     {
