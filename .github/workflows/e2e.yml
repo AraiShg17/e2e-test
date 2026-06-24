@@ -1,0 +1,83 @@
+name: E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  auto-fix:
+    name: Claude auto-fix on failure
+    needs: e2e
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # PR の head ブランチを checkout し、Claude が push できるようにする
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Let Claude diagnose and fix the failing E2E
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # automation モード: prompt を渡すと @claude メンション無しで実行される
+          prompt: |
+            この PR の Playwright E2E テストが失敗しています。
+
+            手順:
+            1. `npm run test:e2e` を実行して失敗内容を確認する。
+            2. 失敗の原因（「ボタンを押してもモーダルが開かない」など）を特定する。
+               原因は基本的にアプリ側のコード `src/main.ts` / `index.html` にあります。
+               テスト `tests/` は正しい仕様なので、テストを甘くして通すのは禁止です。
+            3. アプリのコードを修正し、`npm run test:e2e` が全て緑になるまで繰り返す。
+            4. 緑になったら、変更を分かりやすいメッセージでコミットし、この PR ブランチに push する。
+
+            テストファイルは編集せず、必ずアプリのコードを直して直すこと。
+          claude_args: |
+            {
+              "model": "claude-opus-4-8"
+            }
