@@ -40,6 +40,14 @@ jobs:
             test-results/
           retention-days: 7
 
+      # 失敗時の録画を GIF 化して e2e-evidence ブランチに公開（コメント埋め込み用）
+      - name: Publish failure GIFs
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash scripts/publish-evidence.sh
+
       # 結果を PR コメント + Actions の Summary に出す（artifact を DL しなくても確認できる）
       - name: Comment test results on PR
         if: always()
@@ -79,9 +87,12 @@ jobs:
             const failList = failedTests.length
               ? '\n\n**失敗したテスト**\n' + failedTests.map(t => `- ${t}`).join('\n')
               : '';
+            let gifMd = '';
+            try { gifMd = fs.readFileSync('evidence-gifs.md', 'utf8').trim(); } catch {}
+
             const evidence = ok
               ? ''
-              : `\n\n**証拠（スクショ / 録画 / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\` で再生できます。`;
+              : `\n\n${gifMd ? gifMd + '\n\n' : ''}**さらに詳しく（スクショ / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\` で再生できます。`;
 
             const marker = '<!-- e2e-report -->';
             const body = `${marker}\n${header}\n\n${counts}${failList}${evidence}\n\n<sub>[ワークフロー実行ログ](${runUrl})</sub>`;

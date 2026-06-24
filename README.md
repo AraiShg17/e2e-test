@@ -67,6 +67,7 @@ npx playwright show-trace test-results/**/trace.zip
 ```
 
 CI ではこれらを `playwright-report` artifact にまとめて保存し、結果サマリを PR にコメントします。
+さらに**失敗時の録画は GIF に変換して PR コメントに直接埋め込む**ので、ダウンロードせずにコメント上でそのまま再生して確認できます（GIF は `e2e-evidence` ブランチにホスト。GitHub はコメント内の `<video>` を許可しないため GIF を使用）。
 
 ## CI（PR 時に自動実行）
 
