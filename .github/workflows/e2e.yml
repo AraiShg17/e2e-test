@@ -85,7 +85,9 @@ jobs:
             4. 緑になったら、変更を分かりやすいメッセージでコミットし、この PR ブランチに push する。
 
             テストファイルは編集せず、必ずアプリのコードを直して直すこと。
+          # claude_args はスペース区切りの CLI フラグ（複数行可）。
+          # Claude 自身が git commit/push するため Bash を許可する。
           claude_args: |
-            {
-              "model": "claude-opus-4-8"
-            }
+            --model claude-opus-4-8
+            --max-turns 30
+            --allowedTools Edit,MultiEdit,Write,Read,Glob,Grep,Bash
