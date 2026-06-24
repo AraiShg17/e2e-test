@@ -40,12 +40,14 @@ jobs:
             test-results/
           retention-days: 7
 
-      # 失敗時の録画を GIF 化して e2e-evidence ブランチに公開（コメント埋め込み用）
-      - name: Publish failure GIFs
+      # 失敗時の録画を GIF 1本に変換して e2e-evidence ブランチに公開（コメント埋め込み用）
+      - name: Publish failure GIF
         if: failure()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          GIF_NAME: failure.gif
+          URL_OUT: failure-url.txt
         run: bash scripts/publish-evidence.sh
 
       # 結果を PR コメント + Actions の Summary に出す（artifact を DL しなくても確認できる）
@@ -87,12 +89,15 @@ jobs:
             const failList = failedTests.length
               ? '\n\n**失敗したテスト**\n' + failedTests.map(t => `- ${t}`).join('\n')
               : '';
-            let gifMd = '';
-            try { gifMd = fs.readFileSync('evidence-gifs.md', 'utf8').trim(); } catch {}
+            let gifUrl = '';
+            try { gifUrl = fs.readFileSync('failure-url.txt', 'utf8').trim(); } catch {}
+            const gifMd = gifUrl
+              ? `\n\n**失敗時の様子（クリック不要で再生）**\n\n![モーダルが開かない様子](${gifUrl})`
+              : '';
 
             const evidence = ok
               ? ''
-              : `\n\n${gifMd ? gifMd + '\n\n' : ''}**さらに詳しく（スクショ / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\` で再生できます。`;
+              : `${gifMd}\n\n**さらに詳しく（スクショ / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\` で再生できます。`;
 
             const marker = '<!-- e2e-report -->';
             const body = `${marker}\n${header}\n\n${counts}${failList}${evidence}\n\n<sub>[ワークフロー実行ログ](${runUrl})</sub>`;
@@ -164,3 +169,53 @@ jobs:
             --model claude-opus-4-8
             --max-turns 30
             --allowedTools Edit,MultiEdit,Write,Read,Glob,Grep,Bash
+
+      # Claude の修正後、push された最新コミットに合わせて E2E を再実行（修正が効いたか検証）
+      - name: Sync to Claude's fix
+        run: |
+          git fetch origin "${{ github.event.pull_request.head.ref }}"
+          git reset --hard "origin/${{ github.event.pull_request.head.ref }}"
+
+      - name: Verify fix (re-run E2E)
+        id: verify
+        run: npm run test:e2e
+
+      # 修正後＝成功時の録画を GIF 化して公開（治った証拠）
+      - name: Publish success GIF
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GIF_NAME: success.gif
+          URL_OUT: success-url.txt
+        run: bash scripts/publish-evidence.sh
+
+      # 同じ PR コメントに「✅ 修正後の様子」セクションを追記
+      - name: Append fixed evidence to PR comment
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let gifUrl = '';
+            try { gifUrl = fs.readFileSync('success-url.txt', 'utf8').trim(); } catch {}
+            if (!gifUrl) { core.warning('success GIF URL なし。スキップ'); return; }
+
+            const fixedMarker = '<!-- e2e-fixed -->';
+            const section = `\n\n---\n${fixedMarker}\n### ✅ Claude が自動修正しました（修正後の様子）\n\n![モーダルが開く様子](${gifUrl})`;
+
+            const reportMarker = '<!-- e2e-report -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.includes(reportMarker));
+            if (existing) {
+              // 既に修正後セクションがあれば差し替え、無ければ追記
+              let body = existing.body;
+              const idx = body.indexOf('\n\n---\n' + fixedMarker);
+              if (idx !== -1) body = body.slice(0, idx);
+              body = body + section;
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: reportMarker + section });
+            }

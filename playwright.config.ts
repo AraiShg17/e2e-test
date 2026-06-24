@@ -19,9 +19,9 @@ export default defineConfig({
     : [["html", { open: "never" }], ["list"]],
   use: {
     baseURL,
-    // 失敗を「証拠」として残す: 失敗時スクショ / 失敗時録画 / 失敗時トレース
+    // 証拠を残す。録画は CI では常時取得（成功時の「修正後の証拠」GIF にも使う）。
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: process.env.CI ? "on" : "retain-on-failure",
     trace: "retain-on-failure",
   },
   projects: [
