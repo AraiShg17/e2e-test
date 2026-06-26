@@ -235,6 +235,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # github_token は渡さない → Claude GitHub App として review/コメントを投稿
+          # 自動修正は claude(bot) のコミットで再実行されるため、bot 起動を許可する
+          allowed_bots: claude
           prompt: |
             この PR をレビューしてください。これは Next.js (App Router) + TypeScript +
             CSS Modules のプロジェクトです。
