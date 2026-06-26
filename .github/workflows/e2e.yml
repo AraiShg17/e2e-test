@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  id-token: write # claude-code-action@v1 が OIDC トークンの発行に使う
+  id-token: write # claude-code-action@v1 が OIDC→App token 交換に使う
 
 jobs:
   e2e:
@@ -40,7 +40,7 @@ jobs:
             test-results/
           retention-days: 7
 
-      # 失敗時の録画を GIF 1本に変換して e2e-evidence ブランチに公開（コメント埋め込み用）
+      # 失敗 run: 失敗の録画を GIF 化
       - name: Publish failure GIF
         if: failure()
         env:
@@ -50,7 +50,17 @@ jobs:
           URL_OUT: failure-url.txt
         run: bash scripts/publish-evidence.sh
 
-      # 結果を PR コメント + Actions の Summary に出す（artifact を DL しなくても確認できる）
+      # 成功 run: 成功の録画を GIF 化（治った証拠）
+      - name: Publish success GIF
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GIF_NAME: success.gif
+          URL_OUT: success-url.txt
+        run: bash scripts/publish-evidence.sh
+
+      # 結果を PR コメントに集約。run をまたいで「失敗GIF」「成功GIF」を両方保持する。
       - name: Comment test results on PR
         if: always()
         uses: actions/github-script@v7
@@ -81,39 +91,63 @@ jobs:
               core.warning(`results.json の解析に失敗: ${e.message}`);
             }
 
+            const read = (p) => { try { return fs.readFileSync(p, 'utf8').trim(); } catch { return ''; } };
+            const failUrl = read('failure-url.txt');
+            const successUrl = read('success-url.txt');
+
             const ok = failed === 0;
-            const header = ok
-              ? '### ✅ E2E パス'
-              : '### ❌ E2E 失敗';
+            const marker = '<!-- e2e-report -->';
+
+            // 既存コメントから各ブロックを取り出すヘルパ
+            const extract = (body, name) => {
+              if (!body) return '';
+              const m = body.match(new RegExp(`<!-- ${name}:START -->([\\s\\S]*?)<!-- ${name}:END -->`));
+              return m ? m[1].trim() : '';
+            };
+            const wrap = (name, inner) => inner ? `<!-- ${name}:START -->\n${inner}\n<!-- ${name}:END -->` : '';
+
+            // 既存コメント取得
+            let existingBody = '';
+            let existingId = null;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) { existingBody = existing.body; existingId = existing.id; }
+
+            // 失敗ブロック: 今回失敗ならこの run の GIF、成功なら過去の失敗を引き継ぐ
+            let failInner = extract(existingBody, 'fail');
+            if (!ok && failUrl) {
+              failInner = `**❌ 失敗時の様子（クリック不要で再生）**\n\n![モーダルが開かない様子](${failUrl})`;
+            }
+            // 成功ブロック: 今回成功ならこの run の GIF、失敗なら消す（今は壊れている）
+            let successInner = extract(existingBody, 'success');
+            if (ok) {
+              if (successUrl) successInner = `**✅ 修正後（成功）の様子**\n\n![モーダルが開く様子](${successUrl})`;
+            } else {
+              successInner = '';
+            }
+
+            const header = ok ? '### ✅ E2E パス' : '### ❌ E2E 失敗';
             const counts = `🟢 ${passed} passed / 🔴 ${failed} failed / 🟡 ${flaky} flaky / ⚪ ${skipped} skipped`;
             const failList = failedTests.length
               ? '\n\n**失敗したテスト**\n' + failedTests.map(t => `- ${t}`).join('\n')
               : '';
-            let gifUrl = '';
-            try { gifUrl = fs.readFileSync('failure-url.txt', 'utf8').trim(); } catch {}
-            const gifMd = gifUrl
-              ? `\n\n**失敗時の様子（クリック不要で再生）**\n\n![モーダルが開かない様子](${gifUrl})`
-              : '';
 
-            const evidence = ok
-              ? ''
-              : `${gifMd}\n\n**さらに詳しく（スクショ / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\` で再生できます。`;
-
-            const marker = '<!-- e2e-report -->';
-            const body = `${marker}\n${header}\n\n${counts}${failList}${evidence}\n\n<sub>[ワークフロー実行ログ](${runUrl})</sub>`;
+            const parts = [marker, header, '', counts + failList];
+            const fb = wrap('fail', failInner);
+            const sb = wrap('success', successInner);
+            if (fb) parts.push('', fb);
+            if (sb) parts.push('', sb);
+            parts.push('', `**さらに詳しく（スクショ / トレース）**\n[Artifacts: playwright-report をダウンロード](${runUrl}) → \`index.html\` を開く、または \`npx playwright show-trace <trace.zip>\``);
+            parts.push('', `<sub>[ワークフロー実行ログ](${runUrl})</sub>`);
+            const body = parts.join('\n');
 
             core.summary.addRaw(body).write();
-
-            if (context.payload.pull_request) {
-              const { owner, repo } = context.repo;
-              const issue_number = context.payload.pull_request.number;
-              const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
-              const existing = comments.find(c => c.body && c.body.includes(marker));
-              if (existing) {
-                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-              } else {
-                await github.rest.issues.createComment({ owner, repo, issue_number, body });
-              }
+            if (existingId) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existingId, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
   auto-fix:
@@ -124,29 +158,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # PR の head ブランチを checkout し、Claude が push できるようにする
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          # push は Claude App token に委ねる（GITHUB_TOKEN の認証情報を残さない）
+          persist-credentials: false
+
+      # ループガード: 直近コミットが claude[bot] なら再修正しない（無限ループ防止）
+      - name: Loop guard
+        id: guard
+        run: |
+          author="$(git log -1 --format='%an')"
+          echo "last commit author: $author"
+          if echo "$author" | grep -qi 'claude'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v4
+        if: steps.guard.outputs.skip != 'true'
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
         run: npm ci
 
       - name: Install Playwright browsers
+        if: steps.guard.outputs.skip != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Let Claude diagnose and fix the failing E2E
+        if: steps.guard.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # github_token を明示的に渡すと Claude GitHub App のインストールが不要になり、
-          # 標準の GITHUB_TOKEN で PR にコミット/push できる
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          # automation モード: prompt を渡すと @claude メンション無しで実行される
+          # github_token は渡さない → Claude GitHub App の token を使う。
+          # App token のコミットは GITHUB_TOKEN と違い CI を再起動できる。
+          use_commit_signing: true
           prompt: |
             この PR の Playwright E2E テストが失敗しています。これは Next.js (App Router)
             + TypeScript + CSS Modules のプロジェクトです。
@@ -163,59 +213,43 @@ jobs:
             4. 緑になったら、変更を分かりやすいメッセージでコミットし、この PR ブランチに push する。
 
             テストファイルは編集せず、必ずアプリのコードを直して直すこと。
-          # claude_args はスペース区切りの CLI フラグ（複数行可）。
-          # Claude 自身が git commit/push するため Bash を許可する。
+          # claude_args はスペース区切りの CLI フラグ。Claude が編集・テスト・git するため Bash を許可。
           claude_args: |
             --model claude-opus-4-8
             --max-turns 30
             --allowedTools Edit,MultiEdit,Write,Read,Glob,Grep,Bash
 
-      # Claude の修正後、push された最新コミットに合わせて E2E を再実行（修正が効いたか検証）
-      - name: Sync to Claude's fix
-        run: |
-          git fetch origin "${{ github.event.pull_request.head.ref }}"
-          git reset --hard "origin/${{ github.event.pull_request.head.ref }}"
-
-      - name: Verify fix (re-run E2E)
-        id: verify
-        run: npm run test:e2e
-
-      # 修正後＝成功時の録画を GIF 化して公開（治った証拠）
-      - name: Publish success GIF
-        if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GIF_NAME: success.gif
-          URL_OUT: success-url.txt
-        run: bash scripts/publish-evidence.sh
-
-      # 同じ PR コメントに「✅ 修正後の様子」セクションを追記
-      - name: Append fixed evidence to PR comment
-        if: success()
-        uses: actions/github-script@v7
+  review:
+    name: Claude review (issue + rules)
+    needs: e2e
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          script: |
-            const fs = require('fs');
-            let gifUrl = '';
-            try { gifUrl = fs.readFileSync('success-url.txt', 'utf8').trim(); } catch {}
-            if (!gifUrl) { core.warning('success GIF URL なし。スキップ'); return; }
+          ref: ${{ github.event.pull_request.head.ref }}
 
-            const fixedMarker = '<!-- e2e-fixed -->';
-            const section = `\n\n---\n${fixedMarker}\n### ✅ Claude が自動修正しました（修正後の様子）\n\n![モーダルが開く様子](${gifUrl})`;
+      - name: Claude reviews the PR against the issue and project rules
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # github_token は渡さない → Claude GitHub App として review/コメントを投稿
+          prompt: |
+            この PR をレビューしてください。これは Next.js (App Router) + TypeScript +
+            CSS Modules のプロジェクトです。
 
-            const reportMarker = '<!-- e2e-report -->';
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
-            const existing = comments.find(c => c.body && c.body.includes(reportMarker));
-            if (existing) {
-              // 既に修正後セクションがあれば差し替え、無ければ追記
-              let body = existing.body;
-              const idx = body.indexOf('\n\n---\n' + fixedMarker);
-              if (idx !== -1) body = body.slice(0, idx);
-              body = body + section;
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body: reportMarker + section });
-            }
+            観点:
+            1. PR 説明の `Closes #N` から **issue 本文**を読み、その要件を満たしているか確認する。
+            2. 差分を **`.claude/skills/`** のフロントエンド規約（frontend-directory /
+               frontend-html-css / frontend-native-ui / frontend-a11y-security など）に
+               照らして問題が無いか確認する。
+            3. 指摘は該当行への**インラインレビューコメント**として出す。具体的なコード変更を
+               提案できる箇所は、必ず GitHub の ```suggestion ブロックを使い、レビュアーが
+               「Apply suggestion」で1クリック適用できる形にする。
+            4. 問題が無ければ、短いサマリと共に approve する。
+
+            重要: **ファイルの変更や push は一切しない（レビューのみ）**。
+          claude_args: |
+            --model claude-opus-4-8
+            --max-turns 20
+            --allowedTools Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),mcp__github
