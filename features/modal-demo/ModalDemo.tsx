@@ -22,10 +22,9 @@ export function ModalDemo() {
       </button>
 
       <dialog
-        id="modal"
         ref={dialogRef}
+        id="modal"
         className={styles.dialog}
-        aria-labelledby="modal-title"
       >
         <h2 id="modal-title" className={styles.dialog__title}>
           モーダルが開きました 🎉
