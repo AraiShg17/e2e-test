@@ -207,12 +207,14 @@ jobs:
                原因は基本的にアプリ側のコード `features/modal-demo/ModalDemo.tsx` や
                `app/` 配下にあります。テスト `tests/` は正しい仕様なので、テストを
                甘くして通すのは禁止です。
-            3. `.claude/skills/` のフロントエンド規約（frontend-directory /
-               frontend-html-css / frontend-native-ui など）に従ってアプリのコードを
-               修正し、`npm run test:e2e` が全て緑になるまで繰り返す。
+            3. アプリのコードを修正し、`npm run test:e2e` が全て緑になるまで繰り返す。
             4. 緑になったら、変更を分かりやすいメッセージでコミットし、この PR ブランチに push する。
 
-            テストファイルは編集せず、必ずアプリのコードを直して直すこと。
+            重要な制約:
+            - テストファイルは編集せず、必ずアプリのコードを直して直すこと。
+            - **テストを通すための最小限の変更だけ**を行う。テストに関係しない問題
+              （アクセシビリティの細部・スタイル・命名など）は**触らない**こと。
+              それらの品質指摘は後続の review ジョブが担当する。
           # claude_args はスペース区切りの CLI フラグ。
           # use_commit_signing=true のコミットは mcp__github_file_ops__commit_files で行うため許可必須。
           claude_args: |
