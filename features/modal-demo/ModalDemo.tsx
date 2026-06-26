@@ -21,8 +21,8 @@ export function ModalDemo() {
         モーダルを開く
       </button>
 
-      {/* NOTE: dialog に ref 未設定で開かない（テスト失敗→auto-fix対象） */}
       <dialog
+        ref={dialogRef}
         id="modal"
         className={styles.dialog}
       >
