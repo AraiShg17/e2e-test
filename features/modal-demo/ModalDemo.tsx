@@ -21,11 +21,10 @@ export function ModalDemo() {
         モーダルを開く
       </button>
 
+      {/* NOTE: dialog に ref 未設定で開かない（テスト失敗→auto-fix対象） */}
       <dialog
         id="modal"
-        ref={dialogRef}
         className={styles.dialog}
-        aria-labelledby="modal-title"
       >
         <h2 id="modal-title" className={styles.dialog__title}>
           モーダルが開きました 🎉
