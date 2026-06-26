@@ -213,11 +213,12 @@ jobs:
             4. 緑になったら、変更を分かりやすいメッセージでコミットし、この PR ブランチに push する。
 
             テストファイルは編集せず、必ずアプリのコードを直して直すこと。
-          # claude_args はスペース区切りの CLI フラグ。Claude が編集・テスト・git するため Bash を許可。
+          # claude_args はスペース区切りの CLI フラグ。
+          # use_commit_signing=true のコミットは mcp__github_file_ops__commit_files で行うため許可必須。
           claude_args: |
             --model claude-opus-4-8
             --max-turns 30
-            --allowedTools Edit,MultiEdit,Write,Read,Glob,Grep,Bash
+            --allowedTools Edit,MultiEdit,Write,Read,Glob,Grep,Bash,mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files
 
   review:
     name: Claude review (issue + rules)
