@@ -150,8 +150,8 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
-  auto-fix:
-    name: Claude auto-fix on failure
+  fix-failing-tests:
+    name: Fix failing E2E
     needs: e2e
     if: failure()
     runs-on: ubuntu-latest
